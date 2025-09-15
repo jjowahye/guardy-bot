@@ -754,6 +754,16 @@ async def cmd_help(ctx: commands.Context):
     )
     await ctx.reply(txt)
 
+@bot.command(name="디버그시트")
+async def debug_sheet(ctx):
+    assert SHEET is not None
+    await ctx.send(f"SHEET_ID in env: `{SHEET_ID}`")
+    try:
+        # 2행 유저명 칸에 PING 써보기 (없으면 자동 생성됨)
+        SHEET.update_cell(2, "유저명", "PING")
+        await ctx.send("Write test: OK")
+    except Exception as e:
+        await ctx.send(f"Write test: FAILED -> {e}")
 
 # -----------------------------
 # 실행
