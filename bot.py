@@ -763,10 +763,23 @@ def main():
         raise RuntimeError("환경변수 DISCORD_TOKEN이 설정되지 않았습니다.")
     if not SHEET_ID:
         raise RuntimeError("환경변수 SHEET_ID가 설정되지 않았습니다.")
-    if not GOOGLE_CRED or not os.path.exists(GOOGLE_CRED):
-        raise RuntimeError("환경변수 GOOGLE_APPLICATION_CREDENTIALS가 올바르지 않습니다.")
 
+    # ✅ 자격 증명은 둘 중 하나만 있으면 충분:
+    # 1) GOOGLE_CREDENTIALS_JSON (Railway에서 권장)
+    # 2) GOOGLE_APPLICATION_CREDENTIALS (로컬 파일 경로)
+    has_env_json = bool(os.environ.get("GOOGLE_CREDENTIALS_JSON"))
+    has_file = bool(GOOGLE_CRED and os.path.exists(GOOGLE_CRED))
+
+    if not (has_env_json or has_file):
+        raise RuntimeError(
+            "서비스 계정 자격 증명을 찾을 수 없습니다. "
+            "Railway에서는 GOOGLE_CREDENTIALS_JSON 변수에 키 JSON 전체를 붙여넣으세요. "
+            "또는 로컬에서는 GOOGLE_APPLICATION_CREDENTIALS에 파일 경로를 지정하세요."
+        )
+
+    # 실행
     bot.run(DISCORD_TOKEN)
+
 
 if __name__ == "__main__":
     main()
