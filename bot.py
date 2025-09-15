@@ -754,16 +754,47 @@ async def cmd_help(ctx: commands.Context):
     )
     await ctx.reply(txt)
 
-@bot.command(name="디버그시트")
-async def debug_sheet(ctx):
+@bot.command(name="시트체크")
+async def sheet_check(ctx):
     assert SHEET is not None
-    await ctx.send(f"SHEET_ID in env: `{SHEET_ID}`")
+    await ctx.send(f"SHEET_ID: `{SHEET_ID}`")
+
+    # 서비스계정 이메일 보여주기 (env JSON에서 읽기)
+    sa_email = None
     try:
-        # 2행 유저명 칸에 PING 써보기 (없으면 자동 생성됨)
-        SHEET.update_cell(2, "유저명", "PING")
-        await ctx.send("Write test: OK")
+        import json, os
+        j = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+        if j:
+            sa_email = json.loads(j).get("client_email")
+    except Exception:
+        pass
+    if sa_email:
+        await ctx.send(f"Service Account: `{sa_email}` (이메일을 시트 편집자로 공유했는지 확인)")
+
+    # 워크시트 목록 확인 + 필요시 생성
+    try:
+        # SheetClient가 내부에서 워크시트 보장하도록 만든 함수가 있으면 호출
+        # 없으면 get_all_values()가 실패하면 자동 생성 시도
+        titles = []
+        try:
+            titles.append(SHEET.ws_records.title)
+        except Exception:
+            pass
+        try:
+            titles.append(SHEET.ws_breaks.title)
+        except Exception:
+            pass
+        await ctx.send(f"Worksheets (known): {', '.join([t for t in titles if t]) or 'unknown'}")
     except Exception as e:
-        await ctx.send(f"Write test: FAILED -> {e}")
+        await ctx.send(f"Worksheet introspection failed: {e}")
+
+    # 실제 쓰기 테스트: '출퇴근' 시트의 B2(유저명) 자리에 'PING' 써보기
+    try:
+        SHEET.update_cell(2, "유저명", "PING")
+        await ctx.send("Write test: **OK** → '출퇴근' 시트 B2에 PING이 보여야 합니다.")
+    except Exception as e:
+        await ctx.send(f"Write test: **FAILED** → {e}")
+
 
 # -----------------------------
 # 실행
