@@ -534,20 +534,52 @@ async def cmd_checkin(ctx: commands.Context):
 
     user = ctx.author
     disp = user_display_name(user)
-    d = now_kst_dt().date()
-    row = SHEET.get_or_create_row(d, user.id, disp)
+    today = now_kst_dt().date()
+    dstr = today.strftime("%Y-%m-%d")
 
-    data = SHEET.read_row(row)
-    if data.get("출근시간"):
-        await ctx.reply(f"{disp}님은 이미 출근 기록이 있습니다. (출근 {data['출근시간']})\n필요 시 `!수정 출근 HH:MM` 을 사용하세요.")
+    # 1) 오늘의 '열린 시프트(출근 O, 퇴근 X)'가 있으면 그 행을 쓰고,
+    #    없으면 새 시프트 행을 추가합니다.
+    row = None
+    try:
+        # SheetClient에 이 함수가 있어야 합니다(이전 안내대로 추가했다면 존재).
+        row = SHEET._find_open_row_by_date_userid(dstr, user.id)
+    except Exception:
+        row = None
+
+    if not row:
+        # 새 행 추가
+        try:
+            new_row = [dstr, disp, "", "", "00:00", "", str(user.id)]
+            SHEET._append_row(new_row)
+            # 방금 추가된 같은 날짜+유저의 마지막 행 번호 검색
+            all_vals = SHEET.ws_records.get_all_values()
+            last_idx = None
+            uid_col = SHEET.colmap["유저ID"]
+            date_col = SHEET.colmap["날짜"]
+            for idx, r in enumerate(all_vals[1:], start=2):
+                if len(r) >= max(uid_col, date_col) and r[date_col-1].strip() == dstr and r[uid_col-1].strip() == str(user.id):
+                    last_idx = idx
+            row = last_idx
+        except Exception as e:
+            await ctx.reply(f"시트 행 생성 실패: {e}")
+            return
+
+    if not row:
+        await ctx.reply("시트 행을 찾을 수 없습니다. `!시트체크`로 상태를 점검해 주세요.")
         return
 
-    t_now = now_kst_dt()
-    SHEET.update_cell(row, "유저명", disp)  # 닉네임 갱신
-    SHEET.update_cell(row, "출근시간", hhmm_str(t_now))
-    SHEET.calc_and_update_total(row)
+    # 2) 출근시각 기록
+    try:
+        t_now = now_kst_dt()
+        SHEET.update_cell(row, "유저명", disp)
+        SHEET.update_cell(row, "출근시간", hhmm_str(t_now))
+        SHEET.calc_and_update_total(row)
+    except Exception as e:
+        await ctx.reply(f"출근 기록 중 오류: {e}")
+        return
 
     await ctx.send(f"**{disp}님 출근 완료!** ({hhmm_str(t_now)})")
+
 
 
 @bot.command(name="퇴근")
